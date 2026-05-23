@@ -331,9 +331,11 @@ def fill_document(template_path, output_path, data):
                 run.font.color.rgb = RGBColor(0, 0, 0)
 
     # ===== 19. 结论、建议 =====
-        # ===== 19. 结论、建议 =====
     suggestion_on = data.get('suggestion_on', True)
     suggestion_type = data.get('suggestion_type', 'qualified')
+    
+    # 调试打印
+    print(f"=== 调试信息 === 建议开关: {suggestion_on}, 建议类型: {suggestion_type}")
     
     # 根据类型直接生成建议内容
     if suggestion_type == 'qualified':
@@ -354,17 +356,16 @@ def fill_document(template_path, output_path, data):
                     for run in p.runs:
                         if run.text == '、建议':
                             run.text = ''
-        # 建议段落处理
-        elif full.startswith('2') and ('望有关部门' in full or '基础施工' in full or '建议对不满足' in full):
+        # 建议段落处理 - 匹配以"2"开头的段落
+        elif full.startswith('2'):
             if suggestion_on:
-                reds = _red_runs(p)
-                if reds:
-                    reds[0][1].text = suggestion_content
-                    reds[0][1].font.color.rgb = RGBColor(0, 0, 0)
-                else:
-                    for i, run in enumerate(p.runs):
-                        run.text = suggestion_content if i == 0 else ''
-                        run.font.color.rgb = RGBColor(0, 0, 0)
+                # 替换整个段落内容
+                for i, run in enumerate(p.runs):
+                    if i == 0:
+                        run.text = suggestion_content
+                    else:
+                        run.text = ''
+                    run.font.color.rgb = RGBColor(0, 0, 0)
             else:
                 for run in p.runs:
                     run.text = ''
