@@ -5,7 +5,7 @@ import streamlit as st
 import os
 import re
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime
 from fill_engine import fill_document, refresh_toc
 
 st.set_page_config(page_title="轻型动力触探检测报告生成", page_icon="📋", layout="wide")
@@ -33,6 +33,7 @@ def get_output_path(filename=None):
 
 def build_report_filename(report_number, project_name, suggestion_type):
     """构建 检验编号+工程名称+轻型+合格/不合格.docx"""
+    # 清理文件名中非法字符
     safe_number = report_number.strip().replace('/', '-').replace('\\', '-')
     safe_name = project_name.strip().replace('/', '-').replace('\\', '-')
     result = '合格' if suggestion_type == 'qualified' else '不合格'
@@ -60,11 +61,11 @@ def init_state():
         'geo_mode': '完整',
         'suggestion_on': True,
         'suggestion_type': 'qualified',
+        'suggestion_content': '2、基础施工过程中，望有关部门加强截排水及验槽工作。',
         'foundation_area': '200',
         'testing_standards_page1': 'JGJ340-2015、DB42/T169-2022',
-        'testing_standards_chapter3': 'JGJ340-2015、DB42/T169-2022',
         'testing_standards_item1': '《建筑地基检测技术规范》（JGJ 340-2015）',
-        'testing_standards_item2': '《岩土工程勘察规程》（DB42/T 169-2022）',
+        'testing_standards_chapter3': '《岩土工程勘察规程》（DB42/T 169-2022）',
         'survey_company': '中国兵器工业北方勘察设计研究院有限公司',
         'design_company': '宜昌市城市规划设计研究院有限公司',
         'construction_company': '宜昌建投园林有限公司',
@@ -73,30 +74,33 @@ def init_state():
         'quality_station': '宜昌市市政工程质量安全监督站',
         'elevation_range': '81.782～81.959',
         'date_count': 1,
-        'simple_pile_range': 'K0+534~K1+160段过街污水管道基础',
-        'simple_foundation_type': '换填地基',
-        'simple_soil_layer': '黏土',
+        'raw_data_version': 0,
+        'summary_data_version': 0,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
 
-    # 仪器表格（固定2行）
     if 'instruments' not in st.session_state:
         st.session_state.instruments = [
             {'name': '轻型动力触探仪', 'number': 'S8-172', 'calib_date': '2026-09-11', 'cert_number': 'ZJS8-1712025017'},
             {'name': '钢卷尺', 'number': 'S9-22', 'calib_date': '2027-02-04', 'cert_number': '2026CD02051152'},
         ]
-    
-    # 地质概况表格（可增删行）
     if 'geo_layers' not in st.session_state:
         st.session_state.geo_layers = [
-            {'name': '第①层：填土', 'description': '杂色，稍湿～湿，松散～稍密，主要成分为黏性土，含植物根系、碎石，偶见混凝土块等。全场均有分布，本层工程性质较差，建议挖除。层厚0.20～8.80m，层底埋深0.20～8.80m，层底标高77.82～105.52m。'},
-            {'name': '第②层：粉质黏土', 'description': '灰黑色，可塑，土质不匀，含砂颗粒及姜石，无摇振反应，干强度及韧性中等。该土层在场地内局部分布，工程性质一般，建议进行处理。层厚0.70～7.80m，层底埋深7.00～10.50m，层底高程76.33～82.10m。'},
-            {'name': '第③层：粉砂岩', 'description': '褐红色～青灰色，泥钙质胶结，层状结构，中厚层状构造，层理发育，清晰可见，岩体上部风化裂隙发育。岩石主要由长石、石英及黏土矿物组成，透水性差，断面含有少量灰白色、浅棕红色泥斑，夹灰白色粗砂岩。'},
+            {
+                'name': '第①层：填土',
+                'description': '杂色，稍湿～湿，松散～稍密，主要成分为黏性土，含植物根系、碎石，偶见混凝土块等。全场均有分布，本层工程性质较差，建议挖除。层厚0.20～8.80m，层底埋深0.20～8.80m，层底标高77.82～105.52m。'
+            },
+            {
+                'name': '第②层：粉质黏土',
+                'description': '灰黑色，可塑，土质不匀，含砂颗粒及姜石，无摇振反应，干强度及韧性中等。该土层在场地内局部分布，工程性质一般，建议进行处理。层厚0.70～7.80m，层底埋深7.00～10.50m，层底高程76.33～82.10m。'
+            },
+            {
+                'name': '第③层：粉砂岩',
+                'description': '褐红色～青灰色，泥钙质胶结，层状结构，中厚层状构造，层理发育，清晰可见，岩体上部风化裂隙发育。岩石主要由长石、石英及黏土矿物组成，透水性差，断面含有少量灰白色、浅棕红色泥斑，夹灰白色粗砂岩。'
+            },
         ]
-    
-    # 表8原始数据
     if 'raw_data' not in st.session_state:
         st.session_state.raw_data = [
             {'point_id': '1#（YS7+10）', 'depth': '0.00~0.45', 'blows': '42、51'},
@@ -106,8 +110,6 @@ def init_state():
             {'point_id': '5#（YS8+20）', 'depth': '0.00~0.45', 'blows': '41、51'},
             {'point_id': '6#（YS8+30）', 'depth': '0.00~0.45', 'blows': '42、51'},
         ]
-    
-    # 表9汇总数据（每条记录都包含 soil_layer）
     if 'summary_data' not in st.session_state:
         st.session_state.summary_data = [
             {'soil_layer': '素填土', 'point_id': '1#（YS7+10）', 'elevation': '81.782', 'avg_blows': '42.0', 'bearing_capacity': '208'},
@@ -117,14 +119,13 @@ def init_state():
             {'soil_layer': '素填土', 'point_id': '5#（YS8+20）', 'elevation': '81.931', 'avg_blows': '41.0', 'bearing_capacity': '204'},
             {'soil_layer': '素填土', 'point_id': '6#（YS8+30）', 'elevation': '81.959', 'avg_blows': '42.0', 'bearing_capacity': '208'},
         ]
-    
-    # 附图
     if 'appendix_images' not in st.session_state:
         st.session_state.appendix_images = []
 
 
 init_state()
 
+# ============================================================
 st.title('📋 轻型动力触探检测报告生成工具')
 
 col1, col2 = st.columns([1, 1])
@@ -156,11 +157,11 @@ with col1:
             help='自动添加≥前缀，顿号分隔，如 ≥120、≥130、≥150')
         st.session_state.foundation_area = st.text_input('地基面积（㎡）', st.session_state.foundation_area)
         st.session_state.testing_standards_page1 = st.text_input(
-            '检测依据（首页）', st.session_state.testing_standards_page1)
+            '检测依据（首页）', st.session_state.get('testing_standards_page1', 'JGJ340-2015、DB42/T169-2022'))
         st.session_state.testing_standards_item1 = st.text_input(
-            '检测依据第1条（第三章）', st.session_state.testing_standards_item1)
-        st.session_state.testing_standards_item2 = st.text_input(
-            '检测依据第2条（第三章）', st.session_state.testing_standards_item2)
+            '检测依据（第三章-第1条）', st.session_state.get('testing_standards_item1', '《建筑地基检测技术规范》（JGJ 340-2015）'))
+        st.session_state.testing_standards_chapter3 = st.text_input(
+            '检测依据（第三章-第2条）', st.session_state.get('testing_standards_chapter3', '《岩土工程勘察规程》（DB42/T 169-2022）'))
 
 with col2:
     with st.expander("首页检测信息", expanded=True):
@@ -215,33 +216,34 @@ with st.expander("二、地质概况", expanded=True):
                     to_del.append(i)
         for i in sorted(to_del, reverse=True):
             layers.pop(i)
+            if to_del:
+                st.rerun()
         if st.button('+ 添加地层行'):
             layers.append({'name': '', 'description': ''})
             st.rerun()
     else:
-        st.info('简化模式：仅保留一行描述')
-        st.session_state.simple_pile_range = st.text_input('桩号范围', st.session_state.simple_pile_range)
-        st.session_state.simple_foundation_type = st.text_input('地基类型', st.session_state.simple_foundation_type)
-        st.session_state.simple_soil_layer = st.text_input('主要土层', st.session_state.simple_soil_layer)
+        st.info('简化模式：仅保留"本次检测{桩号范围}过街污水管道基础，地基类型为{地基类型}，换填的主要土层为{土层}。"')
+        st.session_state.elevation_range = st.text_input('标高范围', st.session_state.elevation_range)
 
 # ===== 三、现场检测及仪器 =====
 with st.expander("三、现场检测及仪器（固定2行）", expanded=True):
+    st.caption('支持直接粘贴 Excel 数据（6列，Tab/空格分隔）')
     inst_paste = st.text_area(
-        '粘贴仪器数据（2行4列，Tab分隔）',
-        placeholder='轻型动力触探仪\tS8-172\t2026-09-11\tZJS8-1712025017\n钢卷尺\tS9-22\t2027-02-04\t2026CD02051152',
+        '粘贴仪器数据（2行6列）',
+        placeholder='轻型动力触探仪\tS8-172\t2026-09-11\tZJS8-1712025017\t2027-02-04\t2026CD02051152\n钢卷尺\tS9-22\t2027-02-04\t2026CD02051152',
         height=80, key='inst_paste')
 
     if st.button('📋 解析仪器数据', key='pi'):
         lines = inst_paste.strip().split('\n')
         instruments = []
         for line in lines[:2]:
-            if not line.strip():
-                continue
+            if not line.strip(): continue
             parts = re.split(r'\t|\s{2,}', line.strip())
             if len(parts) >= 4:
                 instruments.append({
-                    'name': parts[0], 'number': parts[1],
-                    'calib_date': parts[2], 'cert_number': parts[3],
+                    'name': parts[0], 'number': parts[1] if len(parts) > 1 else '',
+                    'calib_date': parts[2] if len(parts) > 2 else '',
+                    'cert_number': parts[3] if len(parts) > 3 else '',
                 })
         if instruments:
             st.session_state.instruments = instruments
@@ -266,110 +268,92 @@ with st.expander("三、现场检测及仪器（固定2行）", expanded=True):
 
 # ===== 四、检测结果 =====
 with st.expander("四、检测结果（支持增删行 + 批量粘贴）", expanded=True):
-    tab1, tab2 = st.tabs(['表8 — 原始数据', '表9 — 结果汇总'])
+    tab1, tab2 = st.tabs(['表1 — 原始数据', '表2 — 结果汇总'])
 
     with tab1:
         st.caption('格式：点号 / 检测深度(m) / 击数(击/10cm)')
         raw_paste = st.text_area(
-            '粘贴表8数据（Tab分隔，每行3列）',
+            '粘贴表1数据（Tab分隔，每行3列）',
             placeholder='1#（YS7+10）\t0.00~0.45\t42、51\n2#（YS7+20）\t0.00~0.45\t41、51',
             height=80, key='raw_paste')
-        if st.button('📋 解析表8', key='pr1'):
+        if st.button('📋 解析表1', key='pr1'):
             lines = raw_paste.strip().split('\n')
             rd = []
             for line in lines:
-                if not line.strip():
-                    continue
+                if not line.strip(): continue
                 parts = re.split(r'\t|\s{2,}', line.strip())
                 if len(parts) >= 2:
-                    rd.append({
-                        'point_id': parts[0],
-                        'depth': parts[1] if len(parts) > 1 else '',
-                        'blows': parts[2] if len(parts) > 2 else ''
-                    })
-            if rd:
-                st.session_state.raw_data = rd
-                st.success(f'{len(rd)} 行')
+                    rd.append({'point_id': parts[0], 'depth': parts[1] if len(parts) > 1 else '', 'blows': parts[2] if len(parts) > 2 else ''})
+            if rd: st.session_state.raw_data = rd; st.session_state.raw_data_version += 1; st.success(f'已替换为 {len(rd)} 行')
         raw_data = st.session_state.raw_data
+        rv = st.session_state.raw_data_version
         to_del = []
         for i, rd in enumerate(raw_data):
             c1, c2, c3, c4 = st.columns([2.5, 2, 2, 0.7])
-            with c1: raw_data[i]['point_id'] = st.text_input('点号', rd['point_id'], key=f'rid_{i}', label_visibility='collapsed')
-            with c2: raw_data[i]['depth'] = st.text_input('深度', rd['depth'], key=f'rdep_{i}', label_visibility='collapsed')
-            with c3: raw_data[i]['blows'] = st.text_input('击数', rd['blows'], key=f'rbl_{i}', label_visibility='collapsed')
+            with c1: raw_data[i]['point_id'] = st.text_input('点号', rd['point_id'], key=f'rid_{rv}_{i}', label_visibility='collapsed')
+            with c2: raw_data[i]['depth'] = st.text_input('深度', rd['depth'], key=f'rdep_{rv}_{i}', label_visibility='collapsed')
+            with c3: raw_data[i]['blows'] = st.text_input('击数', rd['blows'], key=f'rbl_{rv}_{i}', label_visibility='collapsed')
             with c4:
-                if st.button('✕', key=f'rdel_{i}'):
-                    to_del.append(i)
-        for i in sorted(to_del, reverse=True):
-            raw_data.pop(i)
-        if st.button('+ 添加行', key='ar1'):
-            raw_data.append({'point_id': '', 'depth': '', 'blows': ''})
-            st.rerun()
+                if st.button('✕', key=f'rdel_{rv}_{i}'): to_del.append(i)
+        for i in sorted(to_del, reverse=True): raw_data.pop(i); st.rerun() if to_del else None
+        if st.button('+ 添加行', key='ar1'): raw_data.append({'point_id': '', 'depth': '', 'blows': ''}); st.rerun()
 
     with tab2:
-        st.caption('格式：土层 / 点号 / 标高 / 平均击数 / 承载力')
+        st.caption('格式：土层 / 点号 / 标高 / 平均击数 / 承载力（小数点位数不变，按原样保留）')
         sum_paste = st.text_area(
-            '粘贴表9数据（Tab分隔，每行5列）',
+            '粘贴表2数据（Tab分隔，每行5列）',
             placeholder='素填土\t1#（YS7+10）\t81.782\t42.0\t208',
             height=80, key='sum_paste')
-        if st.button('📋 解析表9', key='ps2'):
+        if st.button('📋 解析表2', key='ps2'):
             lines = sum_paste.strip().split('\n')
             sd = []
             for line in lines:
-                if not line.strip():
-                    continue
+                if not line.strip(): continue
                 parts = re.split(r'\t|\s{2,}', line.strip())
                 if len(parts) >= 4:
                     sd.append({
-                        'soil_layer': parts[0] if parts[0] else '素填土',
+                        'soil_layer': parts[0],
                         'point_id': parts[1] if len(parts) > 1 else '',
                         'elevation': parts[2] if len(parts) > 2 else '',
                         'avg_blows': parts[3] if len(parts) > 3 else '',
                         'bearing_capacity': parts[4] if len(parts) > 4 else ''
                     })
-            if sd:
-                st.session_state.summary_data = sd
-                st.success(f'{len(sd)} 行')
+            if sd: st.session_state.summary_data = sd; st.session_state.summary_data_version += 1; st.success(f'已替换为 {len(sd)} 行')
         sum_data = st.session_state.summary_data
+        sv = st.session_state.summary_data_version
         to_del = []
         for i, sd in enumerate(sum_data):
             c1, c2, c3, c4, c5, c6 = st.columns([1.5, 1.8, 1.3, 1.3, 1.3, 0.7])
-            with c1: sum_data[i]['soil_layer'] = st.text_input('土层', sd.get('soil_layer', '素填土'), key=f'ss_{i}', label_visibility='collapsed')
-            with c2: sum_data[i]['point_id'] = st.text_input('点号', sd['point_id'], key=f'sid_{i}', label_visibility='collapsed')
-            with c3: sum_data[i]['elevation'] = st.text_input('标高', sd['elevation'], key=f'se_{i}', label_visibility='collapsed')
-            with c4: sum_data[i]['avg_blows'] = st.text_input('击数', sd['avg_blows'], key=f'sa_{i}', label_visibility='collapsed')
-            with c5: sum_data[i]['bearing_capacity'] = st.text_input('承载力', sd['bearing_capacity'], key=f'sb_{i}', label_visibility='collapsed')
+            with c1: sum_data[i]['soil_layer'] = st.text_input('土层', sd['soil_layer'], key=f'ss_{sv}_{i}', label_visibility='collapsed')
+            with c2: sum_data[i]['point_id'] = st.text_input('点号', sd['point_id'], key=f'sid_{sv}_{i}', label_visibility='collapsed')
+            with c3: sum_data[i]['elevation'] = st.text_input('标高', sd['elevation'], key=f'se_{sv}_{i}', label_visibility='collapsed')
+            with c4: sum_data[i]['avg_blows'] = st.text_input('击数', sd['avg_blows'], key=f'sa_{sv}_{i}', label_visibility='collapsed')
+            with c5: sum_data[i]['bearing_capacity'] = st.text_input('承载力', sd['bearing_capacity'], key=f'sb_{sv}_{i}', label_visibility='collapsed')
             with c6:
-                if st.button('✕', key=f'sdel_{i}'):
-                    to_del.append(i)
-        for i in sorted(to_del, reverse=True):
-            sum_data.pop(i)
-        if st.button('+ 添加行', key='as2'):
-            sum_data.append({'soil_layer': '素填土', 'point_id': '', 'elevation': '', 'avg_blows': '', 'bearing_capacity': ''})
-            st.rerun()
+                if st.button('✕', key=f'sdel_{sv}_{i}'): to_del.append(i)
+        for i in sorted(to_del, reverse=True): sum_data.pop(i); st.rerun() if to_del else None
+        if st.button('+ 添加行', key='as2'): sum_data.append({'soil_layer': '', 'point_id': '', 'elevation': '', 'avg_blows': '', 'bearing_capacity': ''}); st.rerun()
 
-# ===== 五、结论与建议 =====
 # ===== 五、结论与建议 =====
 with st.expander("五、结论与建议", expanded=True):
     st.text_area('检测结论（自动同步首页）', st.session_state.test_conclusion, height=80, disabled=True)
-    
+
     st.session_state.suggestion_on = st.checkbox('包含"建议"章节', value=st.session_state.suggestion_on)
-    
+
     if st.session_state.suggestion_on:
-        # 合格/不合格选择（直接保存类型，不保存内容）
-        suggestion_type_options = ['合格', '不合格']
-        selected_type = st.radio(
-            '建议类型',
-            suggestion_type_options,
+        # 直接让用户选择建议内容
+        suggestion_content_options = {
+            '合格': '2、基础施工过程中，望有关部门加强截排水及验槽工作。',
+            '不合格': '2、建议对不满足设计要求的地基采取有效方式进行相应处理后再进行下一步施工。'
+        }
+        selected_suggestion = st.radio(
+            '请选择建议内容',
+            list(suggestion_content_options.keys()),
             index=0,
             horizontal=True
         )
-        st.session_state.suggestion_type = 'qualified' if selected_type == '合格' else 'unqualified'
-        
-        if st.session_state.suggestion_type == 'qualified':
-            st.info('📌 建议内容：2、基础施工过程中，望有关部门加强截排水及验槽工作。')
-        else:
-            st.warning('📌 建议内容：2、建议对不满足设计要求的地基采取有效方式进行相应处理后再进行下一步施工。')
+        st.session_state.suggestion_content = suggestion_content_options[selected_suggestion]
+        st.info(f'📌 当前选择：{st.session_state.suggestion_content}')
 
 # ===== 六、附图 =====
 with st.expander("六、附图（可上传多张图片）", expanded=True):
@@ -380,7 +364,7 @@ with st.expander("六、附图（可上传多张图片）", expanded=True):
         with c1:
             imgs[i]['caption'] = st.text_input(f'附图{i+1} 标题', img.get('caption', ''), key=f'icap_{i}')
         with c2:
-            if img.get('path') and os.path.exists(img.get('path', '')):
+            if img.get('path'):
                 st.caption(f'✅ {os.path.basename(img["path"])}')
             uploaded = st.file_uploader('选择图片', type=['png', 'jpg', 'jpeg', 'bmp'], key=f'ifile_{i}', label_visibility='collapsed')
             if uploaded:
@@ -390,30 +374,27 @@ with st.expander("六、附图（可上传多张图片）", expanded=True):
                     f.write(uploaded.getbuffer())
                 imgs[i]['path'] = temp_path
         with c3:
-            if st.button('✕', key=f'idel_{i}'):
-                to_del.append(i)
-    for i in sorted(to_del, reverse=True):
-        imgs.pop(i)
-    if st.button('+ 添加附图'):
-        imgs.append({'caption': '', 'path': ''})
-        st.rerun()
+            if st.button('✕', key=f'idel_{i}'): to_del.append(i)
+    for i in sorted(to_del, reverse=True): imgs.pop(i); st.rerun() if to_del else None
+    if st.button('+ 添加附图'): imgs.append({'caption': '', 'path': ''}); st.rerun()
 
 # ===== 生成按钮 =====
 st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-of = st.text_input('输出文件名（可选）', placeholder='留空自动命名')
+of = st.text_input('输出文件名（可选）', placeholder='留空自动命名 检测报告_20260522_150000.docx')
 
 if st.button('⬇ 生成报告', type='primary', use_container_width=True):
     with st.spinner('正在生成报告...'):
         try:
             test_date_str = '、'.join([d for d in st.session_state.test_dates if d.strip()])
 
-            # 自动计算报告日期
+            # 自动计算报告日期：首个检测日期 + 2天
             first_date_raw = st.session_state.test_dates[0].strip() if st.session_state.test_dates else ''
             auto_report_date = ''
             try:
                 date_match = re.match(r'(\d{4})\D+(\d{1,2})\D+(\d{1,2})', first_date_raw)
                 if date_match:
                     y, m, d = int(date_match.group(1)), int(date_match.group(2)), int(date_match.group(3))
+                    from datetime import timedelta
                     report_dt = datetime(y, m, d) + timedelta(days=2)
                     auto_report_date = f'{report_dt.year}年{report_dt.month:02d}月{report_dt.day:02d}日'
             except:
@@ -440,13 +421,11 @@ if st.button('⬇ 生成报告', type='primary', use_container_width=True):
                 'pile_range': st.session_state.pile_range,
                 'test_conclusion': st.session_state.test_conclusion,
                 'geo_mode': 'full' if st.session_state.geo_mode == '完整' else 'simple',
-                'simple_pile_range': st.session_state.simple_pile_range,
-                'simple_foundation_type': st.session_state.simple_foundation_type,
-                'simple_soil_layer': st.session_state.simple_soil_layer,
+                'elevation_range': st.session_state.elevation_range,
                 'foundation_area': st.session_state.foundation_area,
                 'testing_standards_page1': st.session_state.testing_standards_page1,
                 'testing_standards_item1': st.session_state.testing_standards_item1,
-                'testing_standards_item2': st.session_state.testing_standards_item2,
+                'testing_standards_chapter3': st.session_state.testing_standards_chapter3,
                 'project_units': {
                     'survey': st.session_state.survey_company,
                     'design': st.session_state.design_company,
@@ -461,12 +440,13 @@ if st.button('⬇ 生成报告', type='primary', use_container_width=True):
                 'summary_data': st.session_state.summary_data,
                 'suggestion_on': st.session_state.suggestion_on,
                 'suggestion_type': st.session_state.suggestion_type,
+                'suggestion_content': st.session_state.get('suggestion_content', ''),
                 'images': st.session_state.appendix_images,
             }
 
             output_path = get_output_path(of if of.strip() else None)
             fill_document(TEMPLATE_PATH, output_path, data)
-            # refresh_toc(output_path, data.get('report_number', ''))  # 暂时禁用，避免卡死
+            # refresh_toc(output_path, data.get('report_number', ''))
 
             # 生成规范文件名并重命名
             auto_filename = build_report_filename(
@@ -476,6 +456,7 @@ if st.button('⬇ 生成报告', type='primary', use_container_width=True):
             )
             final_path = os.path.join(OUTPUT_DIR, auto_filename)
             if output_path != final_path:
+                # 重试：win32com 关闭后 COM 释放文件句柄可能有延迟
                 import time as _time
                 for _retry in range(5):
                     try:
@@ -488,6 +469,7 @@ if st.button('⬇ 生成报告', type='primary', use_container_width=True):
                         if _retry < 4:
                             _time.sleep(0.5)
                         else:
+                            # 最后一次尝试前强制杀 Word
                             try:
                                 import subprocess as _sp
                                 _sp.run(['taskkill', '/F', '/IM', 'WINWORD.EXE'],
@@ -511,4 +493,4 @@ if st.button('⬇ 生成报告', type='primary', use_container_width=True):
             st.error(f'❌ 生成失败：{e}')
             st.code(traceback.format_exc())
 
-st.caption(f'📄 模板：`{TEMPLATE_PATH}` | 📁 输出：`{OUTPUT_DIR}`')
+st.caption(f'模板：`{TEMPLATE_PATH}` | 输出：`{OUTPUT_DIR}`')
