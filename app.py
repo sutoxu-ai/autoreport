@@ -364,12 +364,11 @@ with st.expander("五、结论与建议", expanded=True):
         )
         st.session_state.suggestion_type = 'qualified' if selected_type == '合格' else 'unqualified'
         
-        # 动态显示当前选择的建议内容
+        # 显示当前选择
         if st.session_state.suggestion_type == 'qualified':
             st.success('✅ 当前选择：2、基础施工过程中，望有关部门加强截排水及验槽工作。')
         else:
             st.error('⚠️ 当前选择：2、建议对不满足设计要求的地基采取有效方式进行相应处理后再进行下一步施工。')
-
 # ===== 六、附图 =====
 with st.expander("六、附图（可上传多张图片）", expanded=True):
     imgs = st.session_state.appendix_images
