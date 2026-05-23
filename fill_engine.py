@@ -331,8 +331,15 @@ def fill_document(template_path, output_path, data):
                 run.font.color.rgb = RGBColor(0, 0, 0)
 
     # ===== 19. 结论、建议 =====
+        # ===== 19. 结论、建议 =====
     suggestion_on = data.get('suggestion_on', True)
-    suggestion_content = data.get('suggestion_content', '')  # 直接获取建议内容
+    suggestion_type = data.get('suggestion_type', 'qualified')
+    
+    # 根据类型直接生成建议内容
+    if suggestion_type == 'qualified':
+        suggestion_content = "2、基础施工过程中，望有关部门加强截排水及验槽工作。"
+    else:
+        suggestion_content = "2、建议对不满足设计要求的地基采取有效方式进行相应处理后再进行下一步施工。"
 
     for loc, p in all_p:
         full = p.text.strip()
@@ -349,7 +356,7 @@ def fill_document(template_path, output_path, data):
                             run.text = ''
         # 建议段落处理
         elif full.startswith('2') and ('望有关部门' in full or '基础施工' in full or '建议对不满足' in full):
-            if suggestion_on and suggestion_content:
+            if suggestion_on:
                 reds = _red_runs(p)
                 if reds:
                     reds[0][1].text = suggestion_content
@@ -359,7 +366,6 @@ def fill_document(template_path, output_path, data):
                         run.text = suggestion_content if i == 0 else ''
                         run.font.color.rgb = RGBColor(0, 0, 0)
             else:
-                # 清空建议段落
                 for run in p.runs:
                     run.text = ''
                     run.font.color.rgb = RGBColor(0, 0, 0)
