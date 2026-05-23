@@ -349,26 +349,28 @@ with st.expander("四、检测结果（支持增删行 + 批量粘贴）", expan
             st.rerun()
 
 # ===== 五、结论与建议 =====
+# ===== 五、结论与建议 =====
 with st.expander("五、结论与建议", expanded=True):
     st.text_area('检测结论（自动同步首页）', st.session_state.test_conclusion, height=80, disabled=True)
     
     st.session_state.suggestion_on = st.checkbox('包含"建议"章节', value=st.session_state.suggestion_on)
     
     if st.session_state.suggestion_on:
-        # 合格/不合格选择
+        # 合格/不合格选择（直接保存类型，不保存内容）
+        suggestion_type_options = ['合格', '不合格']
         selected_type = st.radio(
             '建议类型',
-            ['合格', '不合格'],
+            suggestion_type_options,
             index=0,
             horizontal=True
         )
         st.session_state.suggestion_type = 'qualified' if selected_type == '合格' else 'unqualified'
         
-        # 显示当前选择
         if st.session_state.suggestion_type == 'qualified':
-            st.success('✅ 当前选择：2、基础施工过程中，望有关部门加强截排水及验槽工作。')
+            st.info('📌 建议内容：2、基础施工过程中，望有关部门加强截排水及验槽工作。')
         else:
-            st.error('⚠️ 当前选择：2、建议对不满足设计要求的地基采取有效方式进行相应处理后再进行下一步施工。')
+            st.warning('📌 建议内容：2、建议对不满足设计要求的地基采取有效方式进行相应处理后再进行下一步施工。')
+
 # ===== 六、附图 =====
 with st.expander("六、附图（可上传多张图片）", expanded=True):
     imgs = st.session_state.appendix_images
